@@ -79,7 +79,10 @@ def scan(args):
 def build(args):
     spec_path = Path(args.spec).resolve()
     spec = json.loads(spec_path.read_text())
-    build_page(spec, Path(args.out).resolve() if args.out else spec_path.parent / "index.html")
+    cfg = build_page(spec, Path(args.out).resolve() if args.out else spec_path.parent / "index.html")
+    if cfg.get("pairs") and not spec.get("pairs"):  # keep generated pairs with the spec so results can be scored
+        spec["pairs"] = cfg["pairs"]
+        spec_path.write_text(json.dumps(spec, indent=1, ensure_ascii=False))
 
 
 def build_page(spec, out: Path):
@@ -91,12 +94,91 @@ def build_page(spec, out: Path):
             order = [c["id"] for c in cfg["columns"] if c["id"] != ref]
             rng.shuffle(order)
             r["order"] = ([ref] if ref else []) + order
+    if cfg["layout"] == "pairwise" and not cfg.get("pairs"):
+        cfg["pairs"] = make_pairs(cfg)
     out.parent.mkdir(parents=True, exist_ok=True)
     page = (TEMPLATES / "page.html").read_text()
     page = page.replace("__TITLE__", html.escape(cfg.get("title", "Listen")))
     page = page.replace("/*__SPEC__*/null", json.dumps(cfg, ensure_ascii=False).replace("</", "<\\/"))
     out.write_text(page)
     print(out)
+    return cfg
+
+
+def make_pairs(cfg, systems=None, seed=None):
+    """All pairs of the non-reference columns (or `systems`), each on a different row (round-robin over
+    shuffled rows that have both clips), sides randomised. Pair ids are stable: "<a>~<b>@<row>"."""
+    import itertools
+    rng = random.Random(cfg.get("seed", 0) if seed is None else seed)
+    ex = set(cfg.get("exclude") or [])
+    sys_ = systems or [c["id"] for c in cfg["columns"] if c["id"] != cfg.get("reference") and c["id"] not in ex]
+    rows = list(cfg["rows"]); rng.shuffle(rows)
+    pairs, i = [], 0
+    for a, b in itertools.combinations(sys_, 2):
+        for _ in range(len(rows)):
+            r = rows[i % len(rows)]; i += 1
+            if a in r["clips"] and b in r["clips"]:
+                break
+        if rng.random() < 0.5:
+            a, b = b, a
+        pairs.append({"id": f"{a}~{b}@{r['id']}", "row": r["id"], "a": a, "b": b})
+    rng.shuffle(pairs)
+    return pairs
+
+
+def bradley_terry(cfg, choices):
+    """MM fit on pairwise answers: A/B = win, Not sure = half each, Neither = no information (counted
+    separately as 'both bad'). Returns rows sorted by strength, with reason/strength/unusable tallies."""
+    pairs = {p["id"]: p for p in cfg.get("pairs", [])}
+    wins, games, stats = {}, {}, {}
+    def st(x):
+        return stats.setdefault(x, {"won": 0, "lost": 0, "unsure": 0, "both_bad": 0, "unusable": 0,
+                                    "win_reasons": {}, "win_strength": {}})
+    for pid, a in (choices.get("pairs") or {}).items():
+        p = pairs.get(pid)
+        if not p or not a.get("choice"):
+            continue
+        A, B = p["a"], p["b"]
+        for side, sid in (("A", A), ("B", B)):
+            if side in (a.get("unusable") or []):
+                st(sid)["unusable"] += 1
+        c = a["choice"]
+        if c == "neither":
+            st(A)["both_bad"] += 1; st(B)["both_bad"] += 1; continue
+        games[(A, B)] = games.get((A, B), 0) + 1
+        if c == "unsure":
+            wins[A] = wins.get(A, 0) + .5; wins[B] = wins.get(B, 0) + .5
+            st(A)["unsure"] += 1; st(B)["unsure"] += 1; continue
+        w, l = (A, B) if c == "A" else (B, A)
+        wins[w] = wins.get(w, 0) + 1; st(w)["won"] += 1; st(l)["lost"] += 1
+        for r in a.get("reasons") or []:
+            st(w)["win_reasons"][r] = st(w)["win_reasons"].get(r, 0) + 1
+        if a.get("strength"):
+            st(w)["win_strength"][a["strength"]] = st(w)["win_strength"].get(a["strength"], 0) + 1
+    players = sorted(stats)
+    s = {x: 1.0 for x in players}
+    for _ in range(200):
+        new = {}
+        for x in players:
+            den = sum(n / (s[x] + s[y if x == a else a]) for (a, y2), n in games.items() for y in [y2] if x in (a, y2))
+            new[x] = (wins.get(x, 0) + 0.01) / den if den else s[x]
+        tot = sum(new.values()); s = {x: v * len(players) / tot for x, v in new.items()}
+    return sorted(({"system": x, "strength": round(s[x], 3), **stats[x]} for x in players), key=lambda r: -r["strength"])
+
+
+def playoff(args):
+    """New pairwise round among the top-k systems of a finished round, on rows not yet used for that pair."""
+    d = Path(args.dir).resolve()
+    spec = json.loads((d / args.spec).read_text())
+    cfg = {**load_template(spec.get("template", "pairwise")), **spec}
+    ranking = bradley_terry(cfg, _read(d) or {})
+    top = [r["system"] for r in ranking[:args.top]]
+    new = dict(spec); new.pop("pairs", None)
+    new["pairs"] = make_pairs({**cfg, "pairs": None}, systems=top, seed=args.seed)
+    new["title"] = spec.get("title", "") + f" — play-off (top {args.top})"
+    name = args.out or "listen-playoff.json"
+    (d / name).write_text(json.dumps(new, indent=1, ensure_ascii=False))
+    print("top:", top); print(d / name)
 
 
 # ---------------------------------------------------------------- serve / wait / result
@@ -166,6 +248,16 @@ def result(args):
     if args.json:
         print(json.dumps(c, indent=1, ensure_ascii=False)); return
     print(f"status: {c.get('status')}  saved: {c.get('saved_at')}")
+    spec_p = Path(args.dir).resolve() / (getattr(args, "spec", None) or "listen.json")
+    if c.get("pairs") and spec_p.exists():
+        sp_ = json.loads(spec_p.read_text()); cfg = {**load_template(sp_.get("template", "pairwise")), **sp_}
+        print("pairwise ranking (Bradley-Terry; Not sure = half, Neither = both bad):")
+        for r in bradley_terry(cfg, c):
+            print(f"  {r['strength']:6.3f}  {r['system']:28} won {r['won']} lost {r['lost']} unsure {r['unsure']} "
+                  f"both-bad {r['both_bad']} unusable {r['unusable']}  why {r['win_reasons']}  by {r['win_strength']}")
+        for pid, a in c["pairs"].items():
+            if (a.get("note") or "").strip():
+                print(f"  note {pid}: {a['note']}")
     if c.get("excluded"):
         print("excluded:", ", ".join(c["excluded"]))
     if c.get("winner"):
@@ -210,7 +302,11 @@ def main():
     v = sub.add_parser("serve"); v.add_argument("dir"); v.add_argument("--port", type=int, default=0)
     v.add_argument("--no-open", action="store_true"); v.set_defaults(f=serve)
     w = sub.add_parser("wait"); w.add_argument("dir"); w.add_argument("--timeout", type=float, default=0); w.set_defaults(f=wait)
-    r = sub.add_parser("result"); r.add_argument("dir"); r.add_argument("--json", action="store_true"); r.set_defaults(f=result)
+    r = sub.add_parser("result"); r.add_argument("dir"); r.add_argument("--json", action="store_true")
+    r.add_argument("--spec", help="spec file in DIR used to score pairwise rounds (default listen.json)"); r.set_defaults(f=result)
+    po = sub.add_parser("playoff"); po.add_argument("dir"); po.add_argument("--spec", default="listen.json")
+    po.add_argument("--top", type=int, default=3); po.add_argument("--seed", type=int, default=1); po.add_argument("--out")
+    po.set_defaults(f=playoff)
     sub.add_parser("templates").set_defaults(f=lambda a: [print(f"{p.stem:20} {json.loads(p.read_text()).get('about', '')}")
                                                            for p in sorted(TEMPLATES.glob("*.json"))])
     a = ap.parse_args(); a.f(a)

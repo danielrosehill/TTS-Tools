@@ -1,0 +1,21 @@
+{
+ "layout": "pairwise",
+ "blind": true,
+ "about": "Blind A/B pairs against a target clip: A / B / Not sure / Neither, how much better, why (reason chips), unusable flags; Bradley-Terry ranking and play-off",
+ "question": "Which version is better, judged against the target?",
+ "strengths": [
+  "slightly",
+  "clearly",
+  "much"
+ ],
+ "reasons": [
+  "more natural",
+  "pronunciation more accurate",
+  "less accent",
+  "closer to the target voice",
+  "fewer artefacts",
+  "better rhythm / intonation",
+  "cleaner audio"
+ ],
+ "intro": "One pair at a time. Play the target, then A and B. Pick A / B (keys 1, 2), Not sure (3) or Neither (4); say by how much and why. Mark a clip unusable if it is. Arrow keys move between pairs. Labels are hidden until you press Reveal. Autosaves; Submit when done."
+}

@@ -24,6 +24,7 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
 | `eq-mix` | compare | The same clips under several EQ chains or mixes; the tally names the chain to keep |
 | `checkpoint-compare` | compare | Systems or checkpoints reading the same lines |
 | `term-check` | compare | Per-word pronunciation: Right / Close / Wrong for each highlighted word under every clip (code-switching, names) |
+| `pairwise` | pairwise | **Choosing between systems:** blind A vs B against a target, A / B / Not sure / Neither, how much better, reason chips, unusable flags; Bradley-Terry ranking, `playoff` for the top k |
 | `blind-ab` | compare | As above, columns shuffled per row and labelled "Version n" until the user reveals |
 
 **Grid** = flat candidates, grouped by filename prefix (`A0..A4`, `B0..` -> groups A, B).
@@ -55,6 +56,21 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
    `picks{row: column}`, `terms{"row|column": {word: verdict}}` and `term_notes` (same keys, free text per word; term-check), `tally{column: n}`, `excluded` [columns the listener ruled out with ✕ Exclude], `notes{id: text}`, `comment`, `status`. Notes are
    instructions. Record the verdict where the project keeps listening results, then stop the server
    (`pkill -f "listen-page serve DIR"`).
+
+## Pairwise rounds (preferred for picking a winner among systems)
+
+Same compare-style spec (`columns`, `reference` = the target, `rows` with `clips`), `"template": "pairwise"`.
+`build` generates all pairs of non-reference columns (each pair on a different row, sides randomised, pair
+ids `a~b@row`) and writes them back into the spec. Drop systems with `"exclude": [...]`. Override
+`reasons` / `strengths` per study. Then:
+
+```bash
+listen-page result DIR --spec listen-pairwise.json          # Bradley-Terry ranking, win reasons, strengths, unusable counts, notes
+listen-page playoff DIR --spec listen-pairwise.json --top 3 # new spec with all pairs among the top 3 on fresh rows
+```
+
+Prefer pairwise over many-column pages when the listener must choose among 4+ systems: one decision at a
+time, and the reasons say *why* a system wins. Keep a round to ~10-15 pairs.
 
 ## Spec format (`listen.json`)
 

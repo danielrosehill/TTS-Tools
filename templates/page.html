@@ -21,7 +21,7 @@ td.rowh{width:220px;font-size:13px}td.rowh .t{color:var(--mute);margin-top:4px;w
 td.picked{background:#e9f6ee}.cell{display:flex;flex-direction:column;gap:4px;min-width:200px}
 .tally{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.tally span{background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
 #copybox{display:none;margin-top:12px}#copybox textarea{min-height:120px;font-family:monospace}
-mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radius:3px}.terms{display:flex;flex-direction:column;gap:3px;margin:4px 0}.trow{display:flex;flex-direction:column;gap:2px;align-items:flex-start}.tbtns{display:flex;gap:3px;white-space:nowrap}.tname{font-size:12px;font-weight:600;background:#ffe58a;border-radius:3px;padding:0 4px;margin-right:2px}.tb{font-size:12px;padding:1px 7px}.syl{display:flex;gap:2px;align-items:center;flex-wrap:wrap;margin:1px 0}.sylk{font-size:11px;color:var(--mute);width:78px}.sylgap{width:6px}.sb{font-size:12px;padding:0 6px;border-radius:4px}.sb.asked{border-bottom:3px solid var(--acc)}.sb.on{background:var(--ink);border-color:var(--ink);color:#fff}.tnote{width:100%;font:inherit;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:2px 5px;margin-bottom:3px}.tb.on.o0{background:var(--good);border-color:var(--good);color:#fff}.tb.on.o1{background:var(--warn);border-color:var(--warn);color:#fff}.tb.on.o2{background:var(--bad);border-color:var(--bad);color:#fff}body.wide .grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}.xbtn{font-size:11px;padding:0 6px;margin-top:4px;color:var(--bad);border-color:#e7c3be}kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
+mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radius:3px}.terms{display:flex;flex-direction:column;gap:3px;margin:4px 0}.trow{display:flex;flex-direction:column;gap:2px;align-items:flex-start}.tbtns{display:flex;gap:3px;white-space:nowrap}.tname{font-size:12px;font-weight:600;background:#ffe58a;border-radius:3px;padding:0 4px;margin-right:2px}.tb{font-size:12px;padding:1px 7px}.syl{display:flex;gap:2px;align-items:center;flex-wrap:wrap;margin:1px 0}.sylk{font-size:11px;color:var(--mute);width:78px}.sylgap{width:6px}.sb{font-size:12px;padding:0 6px;border-radius:4px}.sb.asked{border-bottom:3px solid var(--acc)}.sb.on{background:var(--ink);border-color:var(--ink);color:#fff}.tnote{width:100%;font:inherit;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:2px 5px;margin-bottom:3px}.tb.on.o0{background:var(--good);border-color:var(--good);color:#fff}.tb.on.o1{background:var(--warn);border-color:var(--warn);color:#fff}.tb.on.o2{background:var(--bad);border-color:var(--bad);color:#fff}body.wide .grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}.xbtn{font-size:11px;padding:0 6px;margin-top:4px;color:var(--bad);border-color:#e7c3be}.pw{display:grid;grid-template-columns:repeat(3,minmax(260px,1fr));gap:10px;margin:10px 0}.card.ref{background:#f3f6fb}.xbtn.on{background:var(--bad);color:#fff}kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
 </style></head><body>
 <header><h1 id="title"></h1><span id="status">Autosaves as you go; you can close and come back.</span>
 <label><input type="checkbox" id="loop"> loop</label>
@@ -34,7 +34,7 @@ mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radiu
 <script>
 const S = /*__SPEC__*/null;
 const KEY = "listen-page:" + location.pathname + ":" + (S.title || "");
-let C = {status: "draft", winner: null, ratings: {}, picks: {}, terms: {}, term_notes: {}, stress: {}, excluded: [], notes: {}, comment: ""};
+let C = {status: "draft", winner: null, ratings: {}, picks: {}, terms: {}, term_notes: {}, stress: {}, excluded: [], pairs: {}, notes: {}, comment: ""};
 let revealed = !S.blind, served = location.protocol.startsWith("http");
 const $ = s => document.querySelector(s), el = (t, a = {}, ...k) => { const e = document.createElement(t);
   for (const [x, y] of Object.entries(a)) x === "class" ? e.className = y : x.startsWith("on") ? e[x] = y : e.setAttribute(x, y);
@@ -202,7 +202,75 @@ function renderCompare() {
   else S.columns.forEach(c => tally.append(el("span", {}, (c.label || c.id) + ": " + (cnt[c.id] || 0))));
 }
 
-const render = () => S.layout === "compare" ? renderCompare() : renderGrid();
+
+// ---- Pairwise layout: one blind A/B pair at a time against the target (pairwise-eval method + reasons) ----
+let pi = 0;
+function renderPairwise() {
+  const b = $("#body"); b.innerHTML = "";
+  const P = S.pairs || [], n = P.length;
+  C.pairs = C.pairs || {};
+  const done = P.filter(p => C.pairs[p.id] && C.pairs[p.id].choice).length;
+  const nav = el("div", {class: "tally"},
+    el("b", {}, `Pair ${pi + 1} / ${n}`), el("span", {}, `${done} answered`));
+  const prev = el("button", {}, "← Prev"), next = el("button", {}, "Next →"), skip = el("button", {}, "Next unanswered");
+  prev.onclick = () => { pi = Math.max(0, pi - 1); renderPairwise(); };
+  next.onclick = () => { pi = Math.min(n - 1, pi + 1); renderPairwise(); };
+  skip.onclick = () => { const j = P.findIndex((p, i) => i > pi && !(C.pairs[p.id] || {}).choice);
+    const k = j >= 0 ? j : P.findIndex(p => !(C.pairs[p.id] || {}).choice); if (k >= 0) { pi = k; renderPairwise(); } };
+  nav.append(prev, next, skip);
+  b.append(nav);
+  if (!n) return;
+  const p = P[pi], row = S.rows.find(r => r.id === p.row) || {};
+  const a = C.pairs[p.id] = C.pairs[p.id] || {};
+  const lab = sid => { const c = S.columns.find(x => x.id === sid) || {}; return c.label || sid; };
+  b.append(el("div", {class: "q"}, hl(row.text || "", row.highlight || S.highlight)));
+  const grid = el("div", {class: "pw"});
+  if (S.reference && row.clips && row.clips[S.reference])
+    grid.append(el("div", {class: "card ref"}, el("b", {}, "Target: " + lab(S.reference)), player(row.clips[S.reference])));
+  for (const [side, sid] of [["A", p.a], ["B", p.b]]) {
+    const un = (a.unusable || []).includes(side);
+    const ub = el("button", {class: "xbtn" + (un ? " on" : "")}, un ? "✕ unusable (marked)" : "✕ unusable");
+    ub.onclick = () => { a.unusable = un ? (a.unusable || []).filter(x => x !== side) : [...(a.unusable || []), side]; save(); renderPairwise(); };
+    grid.append(el("div", {class: "card" + (a.choice === side ? " win" : "")},
+      el("b", {}, side + (revealed ? " · " + lab(sid) : "")), player(row.clips[sid]), ub));
+  }
+  b.append(grid);
+  const choose = el("div", {class: "rates"}, el("span", {class: "sylk"}, "Better:"));
+  for (const [v, t] of [["A", "A (1)"], ["B", "B (2)"], ["unsure", "Not sure (3)"], ["neither", "Neither: both bad (4)"]]) {
+    const x = el("button", {class: a.choice === v ? "on" : ""}, t);
+    x.onclick = () => { a.choice = a.choice === v ? undefined : v; save(); renderPairwise(); };
+    choose.append(x);
+  }
+  b.append(choose);
+  if (a.choice === "A" || a.choice === "B") {
+    const st = el("div", {class: "rates"}, el("span", {class: "sylk"}, "By how much:"));
+    for (const v of (S.strengths || ["slightly", "clearly", "much"])) {
+      const x = el("button", {class: a.strength === v ? "on" : ""}, v);
+      x.onclick = () => { a.strength = a.strength === v ? undefined : v; save(); renderPairwise(); };
+      st.append(x);
+    }
+    b.append(st);
+  }
+  const rs = el("div", {class: "rates"}, el("span", {class: "sylk"}, "Why:"));
+  for (const v of (S.reasons || [])) {
+    const on = (a.reasons || []).includes(v), x = el("button", {class: on ? "on" : ""}, v);
+    x.onclick = () => { a.reasons = on ? a.reasons.filter(y => y !== v) : [...(a.reasons || []), v]; save(); renderPairwise(); };
+    rs.append(x);
+  }
+  b.append(rs);
+  const nt = el("textarea", {placeholder: "note on this pair (optional)", rows: 2}); nt.value = a.note || "";
+  nt.oninput = () => { a.note = nt.value; save(); };
+  b.append(nt);
+}
+document.addEventListener("keydown", e => {
+  if (S.layout !== "pairwise" || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  const p = (S.pairs || [])[pi]; if (!p) return;
+  const m = {"1": "A", "2": "B", "3": "unsure", "4": "neither"}[e.key];
+  if (m) { (C.pairs[p.id] = C.pairs[p.id] || {}).choice = m; save(); renderPairwise(); }
+  if (e.key === "ArrowRight") { pi = Math.min(S.pairs.length - 1, pi + 1); renderPairwise(); }
+  if (e.key === "ArrowLeft") { pi = Math.max(0, pi - 1); renderPairwise(); }
+});
+const render = () => S.layout === "pairwise" ? renderPairwise() : S.layout === "compare" ? renderCompare() : renderGrid();
 let timer = null;
 function save(status) {
   if (status) C.status = status; else if (C.status === "submitted") C.status = "draft";

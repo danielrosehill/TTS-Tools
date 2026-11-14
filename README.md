@@ -12,6 +12,7 @@ hear the original, then one version, then another.
 | `eq-mix` | compare | One set of clips under several EQ chains or mixes, with a per-chain tally |
 | `checkpoint-compare` | compare | Model systems or checkpoints reading the same lines |
 | `term-check` | compare | Per-word Right / Close / Wrong under every clip, for code-switched terms or names |
+| `pairwise` | pairwise | Blind A/B pairs against a target, with how-much and why; Bradley-Terry ranking and play-off rounds |
 | `blind-ab` | compare | Columns shuffled per row, labels hidden until "Reveal labels" |
 
 ```bash
