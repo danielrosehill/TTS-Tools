@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""listen-page: a local HTML page for listening to audio clips side by side and picking between them.
+
+  listen-page scan DIR [--template T] [--ref SUBDIR] [--title ...] [--question ...]   # spec from a folder
+  listen-page build SPEC.json [--out DIR/index.html]                                  # write the page
+  listen-page serve DIR [--port N] [--no-open]     # serve DIR/index.html; picks autosave to DIR/choices.json
+  listen-page wait DIR [--timeout S]               # block until the listener presses Submit
+  listen-page result DIR [--json]                  # print the choices
+
+Layouts: "grid" (candidates, optionally grouped, rate each and pick one winner) and "compare"
+(rows = lines/items, columns = versions, an optional reference column pinned first, one pick per
+row, column tallies, optional blind mode). Templates in ../templates/ preset layout and wording.
+Stdlib only. The server binds 127.0.0.1 and accepts POSTs only from its own origin.
+"""
+import argparse, html, json, os, random, re, sys, time, webbrowser
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+TEMPLATES = ROOT / "templates"
+AUDIO = {".wav", ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac", ".webm"}
+
+
+def load_template(name):
+    p = TEMPLATES / f"{name}.json"
+    if not p.exists():
+        sys.exit(f"no template {name!r}; have: {', '.join(sorted(x.stem for x in TEMPLATES.glob('*.json')))}")
+    return json.loads(p.read_text())
+
+
+def natural(s):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)]
+
+
+def audio_in(d):
+    return sorted((p for p in d.iterdir() if p.suffix.lower() in AUDIO), key=lambda p: natural(p.name))
+
+
+# ---------------------------------------------------------------- scan: folder -> spec
+def scan(args):
+    d = Path(args.dir).resolve()
+    subdirs = sorted((s for s in d.iterdir() if s.is_dir() and audio_in(s)), key=lambda p: natural(p.name))
+    tpl = args.template or ("ab-original" if len(subdirs) > 1 else "voice-pick")
+    spec = {"template": tpl, "title": args.title or d.name}
+    if args.question:
+        spec["question"] = args.question
+    if load_template(tpl)["layout"] == "compare":
+        if len(subdirs) < 2:
+            sys.exit("compare layout needs 2+ subfolders of audio (one per version), matched by file stem")
+        cols = [s.name for s in subdirs]
+        if args.ref:
+            if args.ref not in cols:
+                sys.exit(f"--ref {args.ref!r} is not one of {cols}")
+            cols.remove(args.ref); cols.insert(0, args.ref)
+        files = {c: {p.stem: p for p in audio_in(d / c)} for c in cols}
+        stems = sorted(set().union(*[set(f) for f in files.values()]), key=natural)
+        spec["columns"] = [{"id": c, "label": c} for c in cols]
+        if args.ref:
+            spec["reference"] = args.ref
+        spec["rows"] = [{"id": s, "label": s, "clips": {c: os.path.relpath(files[c][s], d)
+                                                        for c in cols if s in files[c]}} for s in stems]
+    else:
+        clips = audio_in(d) or [p for s in subdirs for p in audio_in(s)]
+        groups = {}
+        for p in clips:  # A0, A1, B0 ... -> groups A, B; no prefix -> one group
+            m = re.match(r"(.*?)[-_ ]?\d+$", p.stem)
+            g = (p.parent.name + "/" if p.parent != d else "") + (m.group(1) if m and m.group(1) else "")
+            groups.setdefault(g, []).append({"id": os.path.relpath(p, d).rsplit(".", 1)[0],
+                                             "label": p.stem, "src": os.path.relpath(p, d)})
+        spec["groups"] = [{"name": g or "Clips", "clips": c} for g, c in groups.items()]
+    out = d / "listen.json"
+    out.write_text(json.dumps(spec, indent=1, ensure_ascii=False))
+    print(out)
+    if not args.no_build:
+        build_page(spec, d / "index.html")
+
+
+# ---------------------------------------------------------------- build: spec -> html
+def build(args):
+    spec_path = Path(args.spec).resolve()
+    spec = json.loads(spec_path.read_text())
+    build_page(spec, Path(args.out).resolve() if args.out else spec_path.parent / "index.html")
+
+
+def build_page(spec, out: Path):
+    cfg = {**load_template(spec.get("template", "voice-pick")), **spec}
+    if cfg.get("blind") and cfg["layout"] == "compare":
+        rng = random.Random(cfg.get("seed", 0))
+        ref = cfg.get("reference")
+        for r in cfg["rows"]:  # per-row shuffled order of the non-reference columns
+            order = [c["id"] for c in cfg["columns"] if c["id"] != ref]
+            rng.shuffle(order)
+            r["order"] = ([ref] if ref else []) + order
+    out.parent.mkdir(parents=True, exist_ok=True)
+    page = (TEMPLATES / "page.html").read_text()
+    page = page.replace("__TITLE__", html.escape(cfg.get("title", "Listen")))
+    page = page.replace("/*__SPEC__*/null", json.dumps(cfg, ensure_ascii=False).replace("</", "<\\/"))
+    out.write_text(page)
+    print(out)
+
+
+# ---------------------------------------------------------------- serve / wait / result
+def serve(args):
+    d = Path(args.dir).resolve()
+    if not (d / "index.html").exists():
+        sys.exit(f"no {d / 'index.html'}: run scan or build first")
+    choices = d / "choices.json"
+
+    class H(SimpleHTTPRequestHandler):
+        def __init__(self, *a, **k):
+            super().__init__(*a, directory=str(d), **k)
+
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            if self.path == "/choices.json" and not choices.exists():
+                self.send_response(204); self.end_headers(); return
+            super().do_GET()
+
+        def do_POST(self):
+            host = self.headers.get("Host", "")
+            origin = self.headers.get("Origin")
+            if self.path != "/save" or (origin and origin != f"http://{host}"):
+                self.send_response(403); self.end_headers(); return
+            body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            data = json.loads(body)
+            data["saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            tmp = choices.with_suffix(".tmp"); tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False))
+            tmp.replace(choices)
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+
+    srv = ThreadingHTTPServer(("127.0.0.1", args.port), H)
+    url = f"http://127.0.0.1:{srv.server_address[1]}/index.html"
+    (d / ".listen-url").write_text(url)
+    print(url, flush=True)
+    if not args.no_open:
+        webbrowser.open(url)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+def _read(d):
+    p = Path(d).resolve() / "choices.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def wait(args):
+    t0 = time.time()
+    while True:
+        c = _read(args.dir)
+        if c and c.get("status") == "submitted":
+            print(json.dumps(c, indent=1, ensure_ascii=False)); return
+        if args.timeout and time.time() - t0 > args.timeout:
+            sys.exit("timeout: not submitted yet")
+        time.sleep(2)
+
+
+def result(args):
+    c = _read(args.dir)
+    if not c:
+        sys.exit("no choices saved yet")
+    if args.json:
+        print(json.dumps(c, indent=1, ensure_ascii=False)); return
+    print(f"status: {c.get('status')}  saved: {c.get('saved_at')}")
+    if c.get("winner"):
+        print(f"winner: {c['winner']}")
+    for k, v in (c.get("ratings") or {}).items():
+        print(f"  {k}: {v}")
+    for k, v in (c.get("picks") or {}).items():
+        print(f"  row {k}: {v}")
+    if c.get("tally"):
+        print("tally:", ", ".join(f"{k} {v}" for k, v in c["tally"].items()))
+    for k, v in (c.get("notes") or {}).items():
+        if v.strip():
+            print(f"  note {k}: {v}")
+    if (c.get("comment") or "").strip():
+        print(f"comment: {c['comment']}")
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="listen-page", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("scan"); s.add_argument("dir"); s.add_argument("--template"); s.add_argument("--ref")
+    s.add_argument("--title"); s.add_argument("--question"); s.add_argument("--no-build", action="store_true")
+    s.set_defaults(f=scan)
+    b = sub.add_parser("build"); b.add_argument("spec"); b.add_argument("--out"); b.set_defaults(f=build)
+    v = sub.add_parser("serve"); v.add_argument("dir"); v.add_argument("--port", type=int, default=0)
+    v.add_argument("--no-open", action="store_true"); v.set_defaults(f=serve)
+    w = sub.add_parser("wait"); w.add_argument("dir"); w.add_argument("--timeout", type=float, default=0); w.set_defaults(f=wait)
+    r = sub.add_parser("result"); r.add_argument("dir"); r.add_argument("--json", action="store_true"); r.set_defaults(f=result)
+    sub.add_parser("templates").set_defaults(f=lambda a: [print(f"{p.stem:20} {json.loads(p.read_text()).get('about', '')}")
+                                                           for p in sorted(TEMPLATES.glob("*.json"))])
+    a = ap.parse_args(); a.f(a)
+
+
+if __name__ == "__main__":
+    main()

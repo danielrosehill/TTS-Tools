@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{--bg:#f6f6f4;--card:#fff;--ink:#1d1d1f;--mute:#6b6b70;--line:#e2e2e0;--acc:#2f6fdf;--good:#1f8a4c;--warn:#b7791f;--bad:#c0392b}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;flex:1 1 auto}#status{color:var(--mute);font-size:13px}
+button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;cursor:pointer}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff}button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+main{padding:16px 20px 80px;max-width:1500px;margin:0 auto}.q{font-size:16px;margin:4px 0 2px}.intro{color:var(--mute);margin:0 0 12px}
+h2{font-size:15px;margin:22px 0 8px}h2 small{color:var(--mute);font-weight:400;margin-left:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px}.card.win{outline:3px solid var(--good)}
+.card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.card b{font-size:15px}
+audio{width:100%;height:36px}.rates{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+textarea{width:100%;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;margin-top:6px;resize:vertical;min-height:30px}
+table{border-collapse:separate;border-spacing:0;width:100%;background:var(--card);border:1px solid var(--line);border-radius:8px}
+th,td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}th{font-size:13px;color:var(--mute);font-weight:600;background:#fafaf9}
+td.rowh{width:220px;font-size:13px}td.rowh .t{color:var(--mute);margin-top:4px}td.ref{background:#f3f6fb}
+td.picked{background:#e9f6ee}.cell{display:flex;flex-direction:column;gap:4px;min-width:200px}
+.tally{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.tally span{background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+#copybox{display:none;margin-top:12px}#copybox textarea{min-height:120px;font-family:monospace}
+kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
+</style></head><body>
+<header><h1 id="title"></h1><span id="status"></span>
+<label><input type="checkbox" id="loop"> loop</label>
+<button id="reveal" style="display:none">Reveal labels</button>
+<button class="primary" id="submit">Submit</button></header>
+<main><p class="q" id="question"></p><p class="intro" id="intro"></p><div id="body"></div>
+<h2>Overall comment</h2><textarea id="comment" placeholder="Anything else"></textarea>
+<div id="copybox"><p>Not served locally, so choices can't be saved to disk. Copy this back to the agent:</p><textarea id="copy" readonly></textarea></div>
+</main>
+<script>
+const S = /*__SPEC__*/null;
+const KEY = "listen-page:" + location.pathname + ":" + (S.title || "");
+let C = {status: "draft", winner: null, ratings: {}, picks: {}, notes: {}, comment: ""};
+let revealed = !S.blind, served = location.protocol.startsWith("http");
+const $ = s => document.querySelector(s), el = (t, a = {}, ...k) => { const e = document.createElement(t);
+  for (const [x, y] of Object.entries(a)) x === "class" ? e.className = y : x.startsWith("on") ? e[x] = y : e.setAttribute(x, y);
+  k.forEach(c => e.append(c)); return e; };
+
+// One clip plays at a time; optional loop.
+document.addEventListener("play", e => { document.querySelectorAll("audio").forEach(a => { if (a !== e.target) a.pause(); });
+  e.target.loop = $("#loop").checked; }, true);
+$("#loop").onchange = () => document.querySelectorAll("audio").forEach(a => a.loop = $("#loop").checked);
+const player = src => el("audio", {controls: "", preload: "none", src});
+const note = id => { const t = el("textarea", {placeholder: "note", rows: 1}); t.value = C.notes[id] || "";
+  t.oninput = () => { C.notes[id] = t.value; save(); }; return t; };
+
+function colLabel(id, i) { const c = S.columns.find(c => c.id === id);
+  if (id === S.reference) return (c.label || id) + " (reference)";
+  return revealed ? (c.label || id) : "Version " + (i + 1); }
+
+function renderGrid() {
+  const b = $("#body"); b.innerHTML = "";
+  for (const g of S.groups) {
+    b.append(el("h2", {}, g.name, el("small", {}, g.note || "")));
+    const grid = el("div", {class: "grid"}); b.append(grid);
+    for (const c of g.clips) {
+      const rates = el("div", {class: "rates"});
+      for (const r of (S.ratings || [])) {
+        const btn = el("button", {class: C.ratings[c.id] === r ? "on" : ""}, r);
+        btn.onclick = () => { C.ratings[c.id] = C.ratings[c.id] === r ? undefined : r; save(); renderGrid(); };
+        rates.append(btn);
+      }
+      const win = el("button", {class: C.winner === c.id ? "on" : "", title: S.pick_label || "Pick"}, "★ " + (S.pick_label || "Pick"));
+      win.onclick = () => { C.winner = C.winner === c.id ? null : c.id; save(); renderGrid(); };
+      grid.append(el("div", {class: "card" + (C.winner === c.id ? " win" : "")},
+        el("div", {class: "top"}, el("b", {}, c.label || c.id), win),
+        c.text ? el("div", {class: "intro"}, c.text) : "", player(c.src), rates, note(c.id)));
+    }
+  }
+}
+
+function renderCompare() {
+  const b = $("#body"); b.innerHTML = "";
+  const tally = el("div", {class: "tally"}); b.append(tally);
+  const t = el("table"); b.append(t);
+  const n = Math.max(...S.rows.map(r => (r.order || S.columns.map(c => c.id)).length));
+  const head = el("tr", {}, el("th", {}, "Item"));
+  if (S.blind && !revealed) for (let i = 0; i < n; i++) head.append(el("th", {}, i === 0 && S.reference ? "Reference" : ""));
+  else (S.columns).forEach(c => head.append(el("th", {}, c.label || c.id)));
+  t.append(head);
+  for (const r of S.rows) {
+    const order = (S.blind && !revealed) ? (r.order || S.columns.map(c => c.id)) : S.columns.map(c => c.id);
+    const tr = el("tr", {}, el("td", {class: "rowh"}, el("b", {}, r.label || r.id), r.text ? el("div", {class: "t"}, r.text) : "", note("row:" + r.id)));
+    let vi = 0;
+    for (const cid of order) {
+      const src = r.clips[cid];
+      const isRef = cid === S.reference;
+      const lab = isRef ? colLabel(cid) : colLabel(cid, vi++);
+      const td = el("td", {class: (isRef ? "ref " : "") + (C.picks[r.id] === cid ? "picked" : "")});
+      if (src) {
+        const cell = el("div", {class: "cell"}, el("small", {}, lab), player(src));
+        if (!isRef || S.ref_pickable) {
+          const btn = el("button", {class: C.picks[r.id] === cid ? "on" : ""}, "Prefer");
+          btn.onclick = () => { C.picks[r.id] = C.picks[r.id] === cid ? undefined : cid; save(); renderCompare(); };
+          cell.append(btn);
+        }
+        td.append(cell);
+      } else td.append(el("small", {}, "—"));
+      tr.append(td);
+    }
+    t.append(tr);
+  }
+  const cnt = {}; Object.values(C.picks).forEach(v => { if (v) cnt[v] = (cnt[v] || 0) + 1; });
+  C.tally = cnt;
+  tally.append(el("b", {}, "Preferred: "));
+  if (!revealed) tally.append(el("span", {}, Object.values(cnt).reduce((a, x) => a + x, 0) + " rows picked (reveal to see tallies)"));
+  else S.columns.forEach(c => tally.append(el("span", {}, (c.label || c.id) + ": " + (cnt[c.id] || 0))));
+}
+
+const render = () => S.layout === "compare" ? renderCompare() : renderGrid();
+let timer = null;
+function save(status) {
+  if (status) C.status = status; else if (C.status === "submitted") C.status = "draft";
+  for (const o of [C.ratings, C.picks]) for (const k in o) if (o[k] === undefined) delete o[k];
+  localStorage.setItem(KEY, JSON.stringify(C));
+  $("#copy").value = JSON.stringify(C, null, 1);
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    if (!served) { $("#status").textContent = "saved in this browser only"; $("#copybox").style.display = "block"; return; }
+    try { const r = await fetch("save", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(C)});
+      if (!r.ok) throw 0; $("#status").textContent = (C.status === "submitted" ? "Submitted " : "Saved ") + new Date().toLocaleTimeString();
+    } catch (e) { $("#status").textContent = "not saved to disk"; $("#copybox").style.display = "block"; }
+  }, status ? 0 : 400);
+}
+
+(async () => {
+  $("#title").textContent = S.title || "Listen"; $("#question").textContent = S.question || ""; $("#intro").textContent = S.intro || "";
+  if (S.blind) { const r = $("#reveal"); r.style.display = ""; r.onclick = () => { revealed = !revealed; r.textContent = revealed ? "Hide labels" : "Reveal labels"; render(); }; }
+  let prev = null;
+  if (served) try { const r = await fetch("choices.json", {cache: "no-store"}); if (r.status === 200) prev = await r.json(); } catch (e) {}
+  if (!prev) try { prev = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  if (prev) C = {...C, ...prev};
+  $("#comment").value = C.comment || ""; $("#comment").oninput = e => { C.comment = e.target.value; save(); };
+  $("#submit").onclick = () => save("submitted");
+  if (!served) $("#copybox").style.display = "block";
+  $("#copy").value = JSON.stringify(C, null, 1);
+  render();
+})();
+</script></body></html>

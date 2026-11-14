@@ -1,0 +1,3 @@
+{"layout": "compare", "about": "The same clips under different EQ chains or mixes (columns = chains): find the chain to keep",
+ "question": "Which EQ / mix sounds best?", "ref_pickable": true,
+ "intro": "Each column is one processing chain applied to the same clips. Prefer the best per row; the tally shows which chain wins overall."}

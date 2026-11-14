@@ -1,0 +1,9 @@
+{
+  "name": "tts-tools",
+  "version": "1.0.0",
+  "description": "Harness for TTS and voice work: local listening pages to compare clips side by side (voice picks, original vs processed, EQ chains, checkpoints, blind A/B) and save the listener's choices as JSON.",
+  "author": {"name": "Daniel Rosehill", "url": "https://github.com/danielrosehill"},
+  "repository": "https://github.com/danielrosehill/TTS-Tools",
+  "license": "MIT",
+  "keywords": ["tts", "audio", "listening-test", "ab-test", "voice-design", "eq"]
+}

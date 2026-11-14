@@ -1,0 +1,3 @@
+{"layout": "compare", "about": "Model systems or checkpoints on the same lines (zero-shot vs fine-tune vs previous release)",
+ "question": "Which system reads each line best?",
+ "intro": "Each row is one line, each column a model or checkpoint. Prefer the best per row; the tally ranks the systems."}

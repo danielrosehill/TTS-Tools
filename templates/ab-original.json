@@ -1,0 +1,3 @@
+{"layout": "compare", "about": "Original vs processed versions of the same clips (raw vs restored, denoised, re-rendered): prefer one per row",
+ "question": "For each clip, which version is better?", "ref_pickable": true,
+ "intro": "Each row is one clip. The reference column is the original; press Prefer on the best version per row (the original included), then Submit."}

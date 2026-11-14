@@ -1,0 +1,3 @@
+{"layout": "grid", "about": "Pick a voice from many candidates (voice design, seeds, speakers): rate each, star one winner",
+ "question": "Which voice do you prefer?", "ratings": ["Shortlist", "Maybe", "No"], "pick_label": "Winner",
+ "intro": "Play any clip; starting one stops the others. Rate as many as you like, star one winner, then Submit."}
