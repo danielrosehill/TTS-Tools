@@ -180,6 +180,9 @@ def result(args):
                 by_col.setdefault(col, {}).setdefault(x, 0)
                 by_col[col][x] += 1
                 print(f"  {row} | {col} | {w}: {x}")
+        for cell, v in (c.get("term_notes") or {}).items():
+            for w, note in v.items():
+                print(f"  note {cell} | {w}: {note}")
         print("words per version:")
         for col, cnt in by_col.items():
             print(f"  {col or '(clip)'}: " + ", ".join(f"{k} {n}" for k, n in sorted(cnt.items())))
