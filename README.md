@@ -11,6 +11,7 @@ hear the original, then one version, then another.
 | `ab-original` | compare | Original vs processed versions of the same clips |
 | `eq-mix` | compare | One set of clips under several EQ chains or mixes, with a per-chain tally |
 | `checkpoint-compare` | compare | Model systems or checkpoints reading the same lines |
+| `term-check` | compare | Per-word Right / Close / Wrong under every clip, for code-switched terms or names |
 | `blind-ab` | compare | Columns shuffled per row, labels hidden until "Reveal labels" |
 
 ```bash

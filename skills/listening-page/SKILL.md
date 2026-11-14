@@ -23,6 +23,7 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
 | `ab-original` | compare | Original vs processed versions of the same clips; the original is the pinned reference |
 | `eq-mix` | compare | The same clips under several EQ chains or mixes; the tally names the chain to keep |
 | `checkpoint-compare` | compare | Systems or checkpoints reading the same lines |
+| `term-check` | compare | Per-word pronunciation: Right / Close / Wrong for each highlighted word under every clip (code-switching, names) |
 | `blind-ab` | compare | As above, columns shuffled per row and labelled "Version n" until the user reveals |
 
 **Grid** = flat candidates, grouped by filename prefix (`A0..A4`, `B0..` -> groups A, B).
@@ -51,7 +52,7 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
 5. Wait: `listen-page wait DIR` (blocks until Submit; run in the background), or read when the
    user says they're done.
 6. Read: `listen-page result DIR` (or `--json`). Fields: `winner`, `ratings{clip: choice}`,
-   `picks{row: column}`, `tally{column: n}`, `notes{id: text}`, `comment`, `status`. Notes are
+   `picks{row: column}`, `terms{"row|column": {word: verdict}}` (term-check), `tally{column: n}`, `notes{id: text}`, `comment`, `status`. Notes are
    instructions. Record the verdict where the project keeps listening results, then stop the server
    (`pkill -f "listen-page serve DIR"`).
 

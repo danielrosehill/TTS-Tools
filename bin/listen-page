@@ -172,6 +172,17 @@ def result(args):
         print(f"  {k}: {v}")
     for k, v in (c.get("picks") or {}).items():
         print(f"  row {k}: {v}")
+    if c.get("terms"):  # per-word verdicts: cell "row|column" -> {word: verdict}
+        by_col = {}
+        for cell, v in c["terms"].items():
+            row, col = cell.rsplit("|", 1) if "|" in cell else (cell, "")
+            for w, x in v.items():
+                by_col.setdefault(col, {}).setdefault(x, 0)
+                by_col[col][x] += 1
+                print(f"  {row} | {col} | {w}: {x}")
+        print("words per version:")
+        for col, cnt in by_col.items():
+            print(f"  {col or '(clip)'}: " + ", ".join(f"{k} {n}" for k, n in sorted(cnt.items())))
     if c.get("tally"):
         print("tally:", ", ".join(f"{k} {v}" for k, v in c["tally"].items()))
     for k, v in (c.get("notes") or {}).items():

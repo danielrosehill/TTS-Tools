@@ -1,0 +1,4 @@
+{"layout": "compare", "prefer": false, "term_ratings": ["Right", "Close", "Wrong"],
+ "about": "Per-word pronunciation check: each highlighted word (code-switched term, name) gets Right / Close / Wrong in every version",
+ "question": "Is each highlighted word pronounced right?",
+ "intro": "Each row is one line, each column a version. Under every clip, mark each highlighted word Right, Close (marginal) or Wrong. Skip any you can't judge. The counts per version appear at the top."}
