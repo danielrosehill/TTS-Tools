@@ -66,6 +66,11 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
  "rows": [{"id": "l01", "label": "l01", "text": "the sentence", "clips": {"raw": "raw/l01.mp3", "sidon": "sidon/l01.mp3"}}]}
 ```
 
+For term-check, a clip or row may also carry `syllables` ({word: [[syl, ...] per space-separated word]}) and
+`asked` ({word: [stressed syllable index per word]}). When the listener marks a word Close or Wrong, its
+syllables appear as "Heard stress" / "Should be" chips (the asked syllable underlined); the answers land in
+`stress{cell: {word: {heard: ["w.s"], should: ["w.s"]}}}`. Use it for stress errors in code-switched words.
+
 Any template key can be overridden in the spec: `layout`, `ratings` (grid buttons), `pick_label`,
 `blind`, `seed` (blind shuffle), `ref_pickable` (whether the reference can be preferred),
 `highlight` (list of words to mark in the clip/row `text`: top level, per clip or per row; use it for

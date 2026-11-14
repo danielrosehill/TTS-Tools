@@ -21,7 +21,7 @@ td.rowh{width:220px;font-size:13px}td.rowh .t{color:var(--mute);margin-top:4px;w
 td.picked{background:#e9f6ee}.cell{display:flex;flex-direction:column;gap:4px;min-width:200px}
 .tally{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.tally span{background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
 #copybox{display:none;margin-top:12px}#copybox textarea{min-height:120px;font-family:monospace}
-mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radius:3px}.terms{display:flex;flex-direction:column;gap:3px;margin:4px 0}.trow{display:flex;flex-direction:column;gap:2px;align-items:flex-start}.tbtns{display:flex;gap:3px;white-space:nowrap}.tname{font-size:12px;font-weight:600;background:#ffe58a;border-radius:3px;padding:0 4px;margin-right:2px}.tb{font-size:12px;padding:1px 7px}.tnote{width:100%;font:inherit;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:2px 5px;margin-bottom:3px}.tb.on.o0{background:var(--good);border-color:var(--good);color:#fff}.tb.on.o1{background:var(--warn);border-color:var(--warn);color:#fff}.tb.on.o2{background:var(--bad);border-color:var(--bad);color:#fff}kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
+mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radius:3px}.terms{display:flex;flex-direction:column;gap:3px;margin:4px 0}.trow{display:flex;flex-direction:column;gap:2px;align-items:flex-start}.tbtns{display:flex;gap:3px;white-space:nowrap}.tname{font-size:12px;font-weight:600;background:#ffe58a;border-radius:3px;padding:0 4px;margin-right:2px}.tb{font-size:12px;padding:1px 7px}.syl{display:flex;gap:2px;align-items:center;flex-wrap:wrap;margin:1px 0}.sylk{font-size:11px;color:var(--mute);width:78px}.sylgap{width:6px}.sb{font-size:12px;padding:0 6px;border-radius:4px}.sb.asked{border-bottom:3px solid var(--acc)}.sb.on{background:var(--ink);border-color:var(--ink);color:#fff}.tnote{width:100%;font:inherit;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:2px 5px;margin-bottom:3px}.tb.on.o0{background:var(--good);border-color:var(--good);color:#fff}.tb.on.o1{background:var(--warn);border-color:var(--warn);color:#fff}.tb.on.o2{background:var(--bad);border-color:var(--bad);color:#fff}body.wide .grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
 </style></head><body>
 <header><h1 id="title"></h1><span id="status">Autosaves as you go; you can close and come back.</span>
 <label><input type="checkbox" id="loop"> loop</label>
@@ -34,7 +34,7 @@ mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radiu
 <script>
 const S = /*__SPEC__*/null;
 const KEY = "listen-page:" + location.pathname + ":" + (S.title || "");
-let C = {status: "draft", winner: null, ratings: {}, picks: {}, terms: {}, term_notes: {}, notes: {}, comment: ""};
+let C = {status: "draft", winner: null, ratings: {}, picks: {}, terms: {}, term_notes: {}, stress: {}, notes: {}, comment: ""};
 let revealed = !S.blind, served = location.protocol.startsWith("http");
 const $ = s => document.querySelector(s), el = (t, a = {}, ...k) => { const e = document.createElement(t);
   for (const [x, y] of Object.entries(a)) x === "class" ? e.className = y : x.startsWith("on") ? e[x] = y : e.setAttribute(x, y);
@@ -56,7 +56,7 @@ function hl(text, terms) {
   box.append(text.slice(last)); return box;
 }
 // Per-word verdicts (spec "term_ratings": ["Right", "Close", "Wrong"]): one button row per highlighted word, per clip.
-function termBox(cellId, terms, rerender) {
+function termBox(cellId, terms, rerender, syl, asked) {
   const opts = S.term_ratings || [];
   if (!opts.length || !(terms || []).length) return "";
   const box = el("div", {class: "terms"});
@@ -70,6 +70,28 @@ function termBox(cellId, terms, rerender) {
         if (C.terms[cellId][t] === o) delete C.terms[cellId][t]; else C.terms[cellId][t] = o; save(); rerender(); };
       btns.append(b);
     });
+    const v = (C.terms[cellId] || {})[t];
+    if (syl && syl[t] && v && opts.indexOf(v) > 0) {  // Close/Wrong: which syllable was stressed, which should be
+      C.stress = C.stress || {};
+      const st = ((C.stress[cellId] || {})[t]) || {};
+      for (const [kind, label] of [["heard", "Heard stress"], ["should", "Should be"]]) {
+        const line = el("div", {class: "syl"}, el("span", {class: "sylk"}, label));
+        syl[t].forEach((word, wi) => {
+          if (wi) line.append(el("span", {class: "sylgap"}, " "));
+          word.forEach((sy, si) => {
+            const id = wi + "." + si, isAsked = asked && asked[t] && asked[t][wi] === si;
+            const b = el("button", {class: "sb" + (st[kind] && st[kind].includes(id) ? " on" : "") + (isAsked ? " asked" : ""),
+              title: isAsked ? "the syllable we asked the model to stress" : ""}, sy);
+            b.onclick = () => { C.stress[cellId] = C.stress[cellId] || {}; const cur = C.stress[cellId][t] = C.stress[cellId][t] || {};
+              const arr = (cur[kind] || []).filter(x => !x.startsWith(wi + "."));  // one per word
+              if (!(st[kind] || []).includes(id)) arr.push(id);
+              cur[kind] = arr; save(); rerender(); };
+            line.append(b);
+          });
+        });
+        row.append(line);
+      }
+    }
     if (S.term_notes !== false) {  // free-text note per word per clip, e.g. "stress on first syllable"
       const n = el("input", {class: "tnote", type: "text", placeholder: "note on " + t});
       n.value = ((C.term_notes || {})[cellId] || {})[t] || "";
@@ -91,6 +113,7 @@ function colLabel(id, i) { const c = S.columns.find(c => c.id === id);
 
 function renderGrid() {
   const b = $("#body"); b.innerHTML = "";
+  if (S.term_ratings) document.body.classList.add("wide");
   for (const g of S.groups) {
     b.append(el("h2", {}, g.name, el("small", {}, g.note || "")));
     const grid = el("div", {class: "grid"}); b.append(grid);
@@ -104,8 +127,8 @@ function renderGrid() {
       const win = el("button", {class: C.winner === c.id ? "on" : "", title: S.pick_label || "Pick"}, "★ " + (S.pick_label || "Pick"));
       win.onclick = () => { C.winner = C.winner === c.id ? null : c.id; save(); renderGrid(); };
       grid.append(el("div", {class: "card" + (C.winner === c.id ? " win" : "")},
-        el("div", {class: "top"}, el("b", {}, c.label || c.id), win),
-        c.text ? el("div", {class: "intro"}, hl(c.text, c.highlight || S.highlight)) : "", player(c.src), termBox(c.id, c.highlight || S.highlight, renderGrid), rates, note(c.id)));
+        el("div", {class: "top"}, el("b", {}, c.label || c.id), S.pick === false ? "" : win),
+        c.text ? el("div", {class: "intro"}, hl(c.text, c.highlight || S.highlight)) : "", player(c.src), termBox(c.id, c.highlight || S.highlight, renderGrid, c.syllables, c.asked), rates, note(c.id)));
     }
   }
 }
@@ -130,7 +153,7 @@ function renderCompare() {
       const td = el("td", {class: (isRef ? "ref " : "") + (C.picks[r.id] === cid ? "picked" : "")});
       if (src) {
         const cell = el("div", {class: "cell"}, (S.blind || S.layout_labels) ? el("small", {}, lab) : "", player(src));
-        const tb = termBox(r.id + "|" + cid, r.highlight || S.highlight, renderCompare);
+        const tb = termBox(r.id + "|" + cid, r.highlight || S.highlight, renderCompare, r.syllables, r.asked);
         if (tb) cell.append(tb);
         if ((!isRef || S.ref_pickable) && S.prefer !== false) {
           const btn = el("button", {class: C.picks[r.id] === cid ? "on" : ""}, "Prefer");

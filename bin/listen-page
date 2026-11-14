@@ -183,6 +183,9 @@ def result(args):
         for cell, v in (c.get("term_notes") or {}).items():
             for w, note in v.items():
                 print(f"  note {cell} | {w}: {note}")
+        for cell, v in (c.get("stress") or {}).items():
+            for w, st in v.items():
+                print(f"  stress {cell} | {w}: heard {st.get('heard')} should {st.get('should')}  (word.syllable, 0-based)")
         print("words per version:")
         for col, cnt in by_col.items():
             print(f"  {col or '(clip)'}: " + ", ".join(f"{k} {n}" for k, n in sorted(cnt.items())))
