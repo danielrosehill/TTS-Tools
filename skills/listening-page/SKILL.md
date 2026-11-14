@@ -41,7 +41,8 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
 3. Enrich `listen.json` when it helps the listener, then `listen-page build DIR/listen.json`:
    - group `note` (e.g. the voice-design attributes behind set A),
    - row `text` (the sentence being read),
-   - column `label` (`"warm: lowshelf +2, de-ess"` beats `warm`).
+   - column `label` (`"warm: lowshelf +2, de-ess"` beats `warm`),
+   - `highlight` on rows/clips: the words the listener should judge (code-switched terms, names).
 4. Serve it in the background and open the browser:
    ```bash
    listen-page serve DIR        # prints the 127.0.0.1 URL; run in background
@@ -65,7 +66,9 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
 ```
 
 Any template key can be overridden in the spec: `layout`, `ratings` (grid buttons), `pick_label`,
-`blind`, `seed` (blind shuffle), `ref_pickable` (whether the reference can be preferred).
+`blind`, `seed` (blind shuffle), `ref_pickable` (whether the reference can be preferred),
+`highlight` (list of words to mark in the clip/row `text`: top level, per clip or per row; use it for
+the words under test, e.g. code-switched terms or names whose pronunciation the listener should judge).
 
 ## Data storage
 

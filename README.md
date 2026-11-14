@@ -22,6 +22,7 @@ bin/listen-page result runs/polish --json
 ```
 
 - Stdlib Python 3, no dependencies; the page is one self-contained HTML file next to the clips.
+- Highlighting: mark the words under test (code-switched terms, names) in each line's text.
 - One clip plays at a time; loop toggle; per-clip and per-row notes; overall comment.
 - The server binds 127.0.0.1 and rejects cross-origin writes. Opened from disk, the page keeps
   choices in the browser and shows JSON to copy back.

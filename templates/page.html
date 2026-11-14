@@ -21,7 +21,7 @@ td.rowh{width:220px;font-size:13px}td.rowh .t{color:var(--mute);margin-top:4px;w
 td.picked{background:#e9f6ee}.cell{display:flex;flex-direction:column;gap:4px;min-width:200px}
 .tally{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.tally span{background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
 #copybox{display:none;margin-top:12px}#copybox textarea{min-height:120px;font-family:monospace}
-kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
+mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radius:3px}kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
 </style></head><body>
 <header><h1 id="title"></h1><span id="status"></span>
 <label><input type="checkbox" id="loop"> loop</label>
@@ -44,6 +44,17 @@ const $ = s => document.querySelector(s), el = (t, a = {}, ...k) => { const e = 
 document.addEventListener("play", e => { document.querySelectorAll("audio").forEach(a => { if (a !== e.target) a.pause(); });
   e.target.loop = $("#loop").checked; }, true);
 $("#loop").onchange = () => document.querySelectorAll("audio").forEach(a => a.loop = $("#loop").checked);
+// Highlight terms (spec "highlight": [...] at top level, per clip or per row): case-insensitive, longest first.
+function hl(text, terms) {
+  const box = document.createElement("span");
+  terms = (terms || []).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!terms.length) { box.textContent = text; return box; }
+  const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp("(" + terms.map(esc).join("|") + ")", "gi");
+  let last = 0, m;
+  while ((m = re.exec(text))) { box.append(text.slice(last, m.index), el("mark", {}, m[0])); last = m.index + m[0].length; }
+  box.append(text.slice(last)); return box;
+}
 const player = src => el("audio", {controls: "", preload: "none", src});
 const note = id => { const t = el("textarea", {placeholder: "note", rows: 1}); t.value = C.notes[id] || "";
   t.oninput = () => { C.notes[id] = t.value; save(); }; return t; };
@@ -68,7 +79,7 @@ function renderGrid() {
       win.onclick = () => { C.winner = C.winner === c.id ? null : c.id; save(); renderGrid(); };
       grid.append(el("div", {class: "card" + (C.winner === c.id ? " win" : "")},
         el("div", {class: "top"}, el("b", {}, c.label || c.id), win),
-        c.text ? el("div", {class: "intro"}, c.text) : "", player(c.src), rates, note(c.id)));
+        c.text ? el("div", {class: "intro"}, hl(c.text, c.highlight || S.highlight)) : "", player(c.src), rates, note(c.id)));
     }
   }
 }
@@ -84,7 +95,7 @@ function renderCompare() {
   t.append(head);
   for (const r of S.rows) {
     const order = (S.blind && !revealed) ? (r.order || S.columns.map(c => c.id)) : S.columns.map(c => c.id);
-    const tr = el("tr", {}, el("td", {class: "rowh"}, el("b", {}, r.label || r.id), r.text ? el("div", {class: "t"}, r.text) : "", note("row:" + r.id)));
+    const tr = el("tr", {}, el("td", {class: "rowh"}, el("b", {}, r.label || r.id), r.text ? el("div", {class: "t"}, hl(r.text, r.highlight || S.highlight)) : "", note("row:" + r.id)));
     let vi = 0;
     for (const cid of order) {
       const src = r.clips[cid];
