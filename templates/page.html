@@ -21,7 +21,7 @@ td.rowh{width:220px;font-size:13px}td.rowh .t{color:var(--mute);margin-top:4px;w
 td.picked{background:#e9f6ee}.cell{display:flex;flex-direction:column;gap:4px;min-width:200px}
 .tally{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.tally span{background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
 #copybox{display:none;margin-top:12px}#copybox textarea{min-height:120px;font-family:monospace}
-mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radius:3px}.terms{display:flex;flex-direction:column;gap:3px;margin:4px 0}.trow{display:flex;gap:3px;align-items:center;flex-wrap:wrap}.tname{font-size:12px;font-weight:600;background:#ffe58a;border-radius:3px;padding:0 4px;margin-right:2px}.tb{font-size:12px;padding:1px 7px}.tb.on.o0{background:var(--good);border-color:var(--good);color:#fff}.tb.on.o1{background:var(--warn);border-color:var(--warn);color:#fff}.tb.on.o2{background:var(--bad);border-color:var(--bad);color:#fff}kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
+mark{background:#ffe58a;color:inherit;font-weight:600;padding:0 2px;border-radius:3px}.terms{display:flex;flex-direction:column;gap:3px;margin:4px 0}.trow{display:flex;flex-direction:column;gap:2px;align-items:flex-start}.tbtns{display:flex;gap:3px;white-space:nowrap}.tname{font-size:12px;font-weight:600;background:#ffe58a;border-radius:3px;padding:0 4px;margin-right:2px}.tb{font-size:12px;padding:1px 7px}.tb.on.o0{background:var(--good);border-color:var(--good);color:#fff}.tb.on.o1{background:var(--warn);border-color:var(--warn);color:#fff}.tb.on.o2{background:var(--bad);border-color:var(--bad);color:#fff}kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px;background:#fff}
 </style></head><body>
 <header><h1 id="title"></h1><span id="status"></span>
 <label><input type="checkbox" id="loop"> loop</label>
@@ -62,12 +62,13 @@ function termBox(cellId, terms, rerender) {
   const box = el("div", {class: "terms"});
   for (const t of terms) {
     const cur = (C.terms[cellId] || {})[t];
-    const row = el("div", {class: "trow"}, el("span", {class: "tname"}, t));
+    const btns = el("div", {class: "tbtns"});
+    const row = el("div", {class: "trow"}, el("span", {class: "tname"}, t), btns);
     opts.forEach((o, i) => {
       const b = el("button", {class: "tb" + (cur === o ? " on o" + i : "")}, o);
       b.onclick = () => { C.terms[cellId] = C.terms[cellId] || {};
         if (C.terms[cellId][t] === o) delete C.terms[cellId][t]; else C.terms[cellId][t] = o; save(); rerender(); };
-      row.append(b);
+      btns.append(b);
     });
     box.append(row);
   }
@@ -121,7 +122,7 @@ function renderCompare() {
       const lab = isRef ? colLabel(cid) : colLabel(cid, vi++);
       const td = el("td", {class: (isRef ? "ref " : "") + (C.picks[r.id] === cid ? "picked" : "")});
       if (src) {
-        const cell = el("div", {class: "cell"}, el("small", {}, lab), player(src));
+        const cell = el("div", {class: "cell"}, (S.blind || S.layout_labels) ? el("small", {}, lab) : "", player(src));
         const tb = termBox(r.id + "|" + cid, r.highlight || S.highlight, renderCompare);
         if (tb) cell.append(tb);
         if ((!isRef || S.ref_pickable) && S.prefer !== false) {
