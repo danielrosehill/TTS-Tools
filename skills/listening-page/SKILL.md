@@ -52,7 +52,7 @@ that path or `ln -sf ${PLUGIN_ROOT}/bin/listen-page ~/.local/bin/`.
 5. Wait: `listen-page wait DIR` (blocks until Submit; run in the background), or read when the
    user says they're done.
 6. Read: `listen-page result DIR` (or `--json`). Fields: `winner`, `ratings{clip: choice}`,
-   `picks{row: column}`, `terms{"row|column": {word: verdict}}` and `term_notes` (same keys, free text per word; term-check), `tally{column: n}`, `notes{id: text}`, `comment`, `status`. Notes are
+   `picks{row: column}`, `terms{"row|column": {word: verdict}}` and `term_notes` (same keys, free text per word; term-check), `tally{column: n}`, `excluded` [columns the listener ruled out with ✕ Exclude], `notes{id: text}`, `comment`, `status`. Notes are
    instructions. Record the verdict where the project keeps listening results, then stop the server
    (`pkill -f "listen-page serve DIR"`).
 

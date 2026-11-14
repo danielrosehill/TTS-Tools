@@ -166,6 +166,8 @@ def result(args):
     if args.json:
         print(json.dumps(c, indent=1, ensure_ascii=False)); return
     print(f"status: {c.get('status')}  saved: {c.get('saved_at')}")
+    if c.get("excluded"):
+        print("excluded:", ", ".join(c["excluded"]))
     if c.get("winner"):
         print(f"winner: {c['winner']}")
     for k, v in (c.get("ratings") or {}).items():
