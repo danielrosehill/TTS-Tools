@@ -42,7 +42,7 @@ saying what it is), `used_by` (repos), `terms` (provider licence and usage terms
 3. Copy the original to `raw.<ext>`. If it is noisy, measure first: the noise floor in the gaps and the
    bandwidth (a spectrogram plus per-band noise vs speech). Then make `clean.flac`: a light chain is
    `arnndn=m=<rnnoise model>:mix=1,afftdn=nr=20:nf=-60:tn=1,highpass=f=70,loudnorm=I=-19:TP=-1.5` at
-   48 kHz. Record the before and after gap level.
+   48 kHz. If hiss is still audible, the stronger chain is `arnndn` twice, then `afftdn=nr=24:nf=-62:tn=1,highpass=f=80,highshelf=f=9000:g=-4,agate=threshold=0.004:ratio=3:attack=5:release=120,loudnorm=I=-19:TP=-1.5`. Offer 3-4 strengths on an `ab-original` page with the raw clip as reference and let the user choose: pause-level numbers can't show hiss under the voice. Record the before and after gap level and the chosen chain.
 4. Write `seed.json`, add the entry to `index.json`, update the README's seed list, then commit and push.
 5. When a project picks one, set `status: anchor` and add the project to `used_by`.
 
