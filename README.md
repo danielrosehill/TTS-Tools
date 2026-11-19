@@ -32,6 +32,7 @@ bin/listen-page result runs/polish --json
 ## Skills
 
 - `listening-page`: when and how an agent builds, serves and reads a listening page.
+- `voice-seeds`: keep a git library of reference voice clips (designed voices, anchors) with full provenance; add, denoise, review. Library path in `~/.claude-user-data/tts-tools/config.json`.
 
 ## Installation
 

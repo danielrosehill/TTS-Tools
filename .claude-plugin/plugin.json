@@ -1,7 +1,7 @@
 {
   "name": "tts-tools",
-  "version": "1.0.0",
-  "description": "TTS listening pages: compare clips side by side, save picks. Voice candidates, original vs processed, EQ chains, checkpoints, blind A/B; choices saved as JSON.",
+  "version": "1.1.0",
+  "description": "TTS listening pages and a voice-seed library: compare clips side by side, save picks (voice candidates, processed vs original, EQ, checkpoints, blind A/B); keep reference voices with provenance.",
   "author": {
     "name": "Daniel Rosehill",
     "url": "https://github.com/danielrosehill"
